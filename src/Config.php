@@ -16,7 +16,6 @@ namespace PhpCsFixer;
 
 use PhpCsFixer\Fixer\FixerInterface;
 use PhpCsFixer\RuleSet\RuleSetDescriptionInterface;
-use PhpCsFixer\RuleSet\RuleSets;
 use PhpCsFixer\Runner\Parallel\ParallelConfig;
 use PhpCsFixer\Runner\Parallel\ParallelConfigFactory;
 
@@ -25,7 +24,7 @@ use PhpCsFixer\Runner\Parallel\ParallelConfigFactory;
  * @author Katsuhiro Ogawa <ko.fivestar@gmail.com>
  * @author Dariusz Rumiński <dariusz.ruminski@gmail.com>
  */
-class Config implements ConfigInterface, ParallelAwareConfigInterface
+class Config implements ConfigInterface, ParallelAwareConfigInterface, CustomRulesetsAwareConfigInterface
 {
     /**
      * @var non-empty-string
@@ -36,6 +35,11 @@ class Config implements ConfigInterface, ParallelAwareConfigInterface
      * @var list<FixerInterface>
      */
     private array $customFixers = [];
+
+    /**
+     * @var list<class-string<RuleSetDescriptionInterface>>
+     */
+    private array $customRuleSets = [];
 
     /**
      * @var null|iterable<\SplFileInfo>
@@ -108,6 +112,11 @@ class Config implements ConfigInterface, ParallelAwareConfigInterface
         return $this->customFixers;
     }
 
+    public function getCustomRuleSets(): array
+    {
+        return $this->customRuleSets;
+    }
+
     /**
      * @return Finder
      */
@@ -178,17 +187,21 @@ class Config implements ConfigInterface, ParallelAwareConfigInterface
     }
 
     /**
-     * Registers custom rule sets to be used the same way as built-in rule sets.
-     *
      * @param list<class-string<RuleSetDescriptionInterface>> $ruleSets
-     *
-     * @todo Introduce it in ConfigInterface in 4.0
      */
     public function registerCustomRuleSets(array $ruleSets): ConfigInterface
     {
         foreach ($ruleSets as $class) {
-            RuleSets::registerRuleSet($class);
+            if (!class_exists($class)) {
+                throw new \UnexpectedValueException(sprintf('Rule set "%s" does not exist.', $class));
+            }
+
+            if (!\in_array(RuleSetDescriptionInterface::class, class_implements($class), true)) {
+                throw new \UnexpectedValueException(sprintf('Rule set "%s" does not implement "%s".', $class, RuleSetDescriptionInterface::class));
+            }
         }
+
+        $this->customRuleSets = array_values(array_unique(array_merge($this->customRuleSets, $ruleSets)));
 
         return $this;
     }
